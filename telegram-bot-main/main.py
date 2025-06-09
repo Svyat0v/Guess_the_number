@@ -3,12 +3,15 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
 import os
-import sqlite3
+from management import init_db, add_user, get_stats, update_stats
 
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
+
+# Создание gamedb.sql
+init_db()
 
 # Игровые значения.
 number_user = 0
@@ -19,13 +22,16 @@ attempt = 0
 # Команда старт бота.
 @bot.message_handler(commands=['start'])
 def start_bot(message):
+    add_user(message.from_user.id, message.from_user.username)
     markup = InlineKeyboardMarkup()
     button_1 = InlineKeyboardButton(text='Начать', callback_data="begin")
-    markup.add(button_1)
+    button_stats = InlineKeyboardButton(text='Статистика', callback_data="stats")
+    markup.add(button_1, button_stats)
     bot.send_message(
         message.chat.id,
-        text='👋 Привет, хочешь поиграть угадай число? 🤔 '
-             'Если ты готов жми на кнопку "Начать".'
+        text=f'👋 Привет {message.from_user.username}, '
+             f'хочешь поиграть угадай число?'
+             '\n🤔 Если ты готов жми на кнопку "Начать".'
              '\nПравила игры будут по команде /help.',
         reply_markup=markup
     )
@@ -51,6 +57,17 @@ def user_number_registration(call):
     global attempt
     game_number = random.randint(1, 100)
     attempt = 6
+
+    if call.data == "stats":
+        user_id = call.from_user.id
+        games, winning = get_stats(user_id)
+        bot.send_message(
+            call.message.chat.id,
+            text=f"📊 Твоя статистика: {call.message.from_user.username}"
+                 f"\n🎮 Игр сыграно: {games}"
+                 f"\n🏆 Побед: {winning}"
+        )
+        return
 
     if call.data == "begin":
         bot.send_message(
@@ -96,6 +113,7 @@ def game_logic(message):
                 message.chat.id,
                 text=f"🎉 Молодец ты угадал число {game_number}."
             )
+            update_stats(message.from_user.id, winning=True)
             send_play_again_button(message.chat.id)
 
         elif number_user > game_number:
@@ -116,6 +134,7 @@ def game_logic(message):
 
     if attempt <= 0:
         bot.send_message(message.chat.id, text='❌ Увы попытки закончились.')
+        update_stats(message.from_user.id, winning=False)
         send_play_again_button(message.chat.id)
         return
 
@@ -123,18 +142,3 @@ def game_logic(message):
 print("БОТ ЗАПУЩЕН...")
 bot.polling()
 print("БОТ ЗАВЕРШИЛ СЕАНС.")
-
-
-# Идеи для улучшения бота:
-#
-#     - Добавим уровни сложности.
-#
-#     - Храним лучшие результаты игроков через словарь: stats = {},
-#           или через sqlite3. Пример: stats{
-#                                           User_name{
-#                                                     games: int,
-#                                                     winning: int,
-#                                            }
-#                                      }
-#
-#     - Сделать вывод статистики для пользователя.

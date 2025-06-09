@@ -1,5 +1,7 @@
 # Игнорировать файлы
 .env
+telegram-bot-main/test_bot_file.py
+telegram-bot-main/gamedb.sql
 
 # Игнорировать Кеши Python
 __pycache__/
