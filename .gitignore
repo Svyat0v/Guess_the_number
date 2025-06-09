@@ -2,6 +2,7 @@
 .env
 telegram-bot-main/test_bot_file.py
 telegram-bot-main/gamedb.sql
+images/screenshot.png
 
 # Игнорировать Кеши Python
 __pycache__/

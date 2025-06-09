@@ -1,9 +1,10 @@
+from dotenv import load_dotenv
+from management import init_db, add_user, get_stats, update_stats
+import os
 import random
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from dotenv import load_dotenv
-import os
-from management import init_db, add_user, get_stats, update_stats
+from photo_cat import get_photo_cat
 
 
 load_dotenv()
@@ -109,9 +110,11 @@ def game_logic(message):
 
     if attempt > 0:
         if number_user == game_number:
+            chat_id = message.chat.id
+            bot.send_photo(chat_id, get_photo_cat())
             bot.send_message(
                 message.chat.id,
-                text=f"🎉 Молодец ты угадал число {game_number}."
+                text=f"🎉 Молодец ты угадал число {game_number}. Держи котика🐈"
             )
             update_stats(message.from_user.id, winning=True)
             send_play_again_button(message.chat.id)
@@ -138,7 +141,11 @@ def game_logic(message):
         send_play_again_button(message.chat.id)
         return
 
+def main():
+    bot.polling(non_stop=True)
 
-print("БОТ ЗАПУЩЕН...")
-bot.polling()
-print("БОТ ЗАВЕРШИЛ СЕАНС.")
+
+if __name__ == "__main__":
+    print("БОТ ЗАПУЩЕН...")
+    main()
+    print("БОТ ЗАВЕРШИЛ СЕАНС.")
