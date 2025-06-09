@@ -15,14 +15,12 @@ bot = telebot.TeleBot(TOKEN)
 init_db()
 
 # Игровые значения.
-number_user = 0
-game_number = None
-attempt = 0
+user_data = {}
 
 
-# Команда старт бота.
 @bot.message_handler(commands=['start'])
 def start_bot(message):
+    """Команда старта бота."""
     add_user(message.from_user.id, message.from_user.username)
     markup = InlineKeyboardMarkup()
     button_1 = InlineKeyboardButton(text='Начать', callback_data="begin")
@@ -38,9 +36,9 @@ def start_bot(message):
     )
 
 
-# Команда помощь, показывает правила.
 @bot.message_handler(commands=['help'])
 def help_bot(message):
+    """Команда помощь, показывает правила."""
     bot.send_message(
         message.chat.id,
         text="Правила игры очень просты. Бот загадал число от 1 до 100, "
@@ -51,14 +49,9 @@ def help_bot(message):
     )
 
 
-# Команда для регистрации числа пользователя.
 @bot.callback_query_handler(func=lambda call:True)
 def user_number_registration(call):
-    global game_number
-    global attempt
-    game_number = random.randint(1, 100)
-    attempt = 6
-
+    """Команда для регистрации числа пользователя."""
     if call.data == "stats":
         user_id = call.from_user.id
         games, winning = get_stats(user_id)
@@ -68,9 +61,14 @@ def user_number_registration(call):
                  f"\n🎮 Игр сыграно: {games}"
                  f"\n🏆 Побед: {winning}"
         )
-        return
+        send_play_again_button(call.message.chat.id)
 
     if call.data == "begin":
+        user_id = call.from_user.id
+        user_data[user_id] = {
+            "number": random.randint(1, 100),
+            "attempt": 6
+        }
         bot.send_message(
             call.message.chat.id,
             text="Напиши число от 1 до 100."
@@ -78,8 +76,9 @@ def user_number_registration(call):
         bot.register_next_step_handler(call.message, game_logic)
 
 
-# Перезапуск игры.
+@bot.message_handler()
 def send_play_again_button(chat_id):
+    """Перезапуск игры."""
     markup = InlineKeyboardMarkup()
     button_2 = InlineKeyboardButton(
         text="🎲 Сыграть ещё раз 🎲",
@@ -93,13 +92,12 @@ def send_play_again_button(chat_id):
     )
 
 
-# Игровая логика.
 def game_logic(message):
-    global number_user
-    global game_number
-    global attempt
-    print(f'Загаданное число: {game_number}')
-    print(f"осталось попыток {attempt}")
+    """Игровая логика."""
+    user_id = message.from_user.id
+
+    if user_id not in user_data:
+        bot.send_message(message.chat.id, text="❗ Начни игру командой /start или нажми кнопку.")
 
     try:
         number_user = int(message.text)
@@ -108,38 +106,39 @@ def game_logic(message):
         bot.register_next_step_handler(message, game_logic)
         return
 
+    target_number = user_data[user_id]["number"]
+    attempt = user_data[user_id]["attempt"]
+
     if attempt > 0:
-        if number_user == game_number:
-            chat_id = message.chat.id
-            bot.send_photo(chat_id, get_photo_cat())
+        if number_user == target_number:
+            bot.send_photo(message.chat.id, get_photo_cat())
             bot.send_message(
                 message.chat.id,
-                text=f"🎉 Молодец ты угадал число {game_number}. Держи котика🐈"
+                text=f"🎉 Молодец, ты угадал число: {target_number}"
+                     f"\n🐈 Держи котика."
             )
-            update_stats(message.from_user.id, winning=True)
+            update_stats(user_id, winning=True)
+            user_data.pop(user_id)
             send_play_again_button(message.chat.id)
+            return
 
-        elif number_user > game_number:
+        else:
             attempt -= 1
+            user_data[user_id]["attempt"] = attempt
+            hint = "Меньше👇" if number_user > target_number else "Больше👆"
             bot.send_message(
                 message.chat.id,
-                text=f"Меньше👇.\nОсталось попыток: {attempt}"
+                text=f"{hint}\nОсталось попыток: {attempt}"
             )
-            bot.register_next_step_handler(message, game_logic)
 
-        elif number_user < game_number:
-            attempt -= 1
-            bot.send_message(
-                message.chat.id,
-                text=f"Больше👆.\nОсталось попыток: {attempt}"
-            )
-            bot.register_next_step_handler(message, game_logic)
+            if attempt > 0:
+                bot.register_next_step_handler(message, game_logic)
+            else:
+                bot.send_message(message.chat.id, "❌ Увы, попытки закончились.")
+                update_stats(user_id, winning=False)
+                user_data.pop(user_id)
+                send_play_again_button(message.chat.id)
 
-    if attempt <= 0:
-        bot.send_message(message.chat.id, text='❌ Увы попытки закончились.')
-        update_stats(message.from_user.id, winning=False)
-        send_play_again_button(message.chat.id)
-        return
 
 def main():
     bot.polling(non_stop=True)
@@ -149,3 +148,6 @@ if __name__ == "__main__":
     print("БОТ ЗАПУЩЕН...")
     main()
     print("БОТ ЗАВЕРШИЛ СЕАНС.")
+
+# Переделать систему показа статистики (Показывать рейтинг всех пользователей).
+# Убрать сообщение если не осталось попыток для чисел.
